@@ -40,7 +40,13 @@ import jpeg4py._cffi as jpeg
 from jpeg4py._cffi import TJPF_RGB
 import numpy
 import os
+from fractions import Fraction
 
+VALID_SCALES = [
+    Fraction(2, 1), Fraction(15, 8), Fraction(7, 4), Fraction(13, 8),
+    Fraction(3, 2), Fraction(11, 8), Fraction(5, 4), Fraction(9, 8),
+    Fraction(1, 1), Fraction(7, 8),  Fraction(3, 4), Fraction(5, 8),
+    Fraction(1, 2), Fraction(3, 8), Fraction(1, 4), Fraction(1, 8)]
 
 class JPEGRuntimeError(RuntimeError):
     def __init__(self, msg, code):
@@ -179,12 +185,23 @@ class JPEG(Base):
         self.height = int(whs[1])
         self.subsampling = int(whs[2])
 
-    def decode(self, dst=None, pixfmt=TJPF_RGB):
+    def decode(self, dst=None, pixfmt=TJPF_RGB, scale=None):
+        if scale is not None:
+            scale = Fraction.from_float(scale)
+            if scale not in VALID_SCALES:
+                raise ValueError("scale should be one of %s" %
+                                 list(map(str, VALID_SCALES)))
         bpp = jpeg.tjPixelSize[pixfmt]
         if dst is None:
             if self.width is None:
                 self.parse_header()
-            sh = [self.height, self.width]
+            if scale is None:
+                sh = [self.height, self.width]
+            else:
+                sh = [(self.height * scale.numerator +
+                       scale.denominator - 1) // scale.denominator,
+                      (self.width * scale.numerator +
+                       scale.denominator - 1) // scale.denominator]
             if bpp > 1:
                 sh.append(bpp)
             dst = numpy.zeros(sh, dtype=numpy.uint8)
